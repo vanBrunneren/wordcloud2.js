@@ -2,7 +2,7 @@
  * wordcloud2.js
  * http://timdream.org/wordcloud2.js/
  *
- * Copyright 2011 - 2019 Tim Guan-tin Chien and contributors.
+ * Copyright 2011 - 2013 Tim Chien
  * Released under the MIT license
  */
 
@@ -190,7 +190,6 @@ if (!window.clearImmediate) {
 
       gridSize: 8,
       drawOutOfBound: false,
-      shrinkToFit: false,
       origin: null,
 
       drawMask: false,
@@ -386,6 +385,26 @@ if (!window.clearImmediate) {
       getTextClasses = settings.classes;
     }
 
+    /* convert fontFamily into a function */
+    if (typeof settings.fontFamily !== 'function') {
+      (function () {
+        var value = settings.fontFamily;
+        settings.fontFamily = function fontFamily(word) {
+          return value;
+        };
+      })();
+    }
+
+    /* convert fontWeight into a function */
+    if (typeof settings.fontWeight !== 'function') {
+      (function () {
+        var value = settings.fontWeight;
+        settings.fontWeight = function fontWeight(word) {
+          return value;
+        };
+      })();
+    }
+
     /* Interactive */
     var interactive = false;
     var infoGrid = [];
@@ -545,8 +564,9 @@ if (!window.clearImmediate) {
       var fcanvas = document.createElement('canvas');
       var fctx = fcanvas.getContext('2d', { willReadFrequently: true });
 
-      fctx.font = fontWeight + ' ' +
-        (fontSize * mu).toString(10) + 'px ' + settings.fontFamily;
+      fctx.font = settings.fontWeight(word) + ' ' + (fontSize * mu).toString(10) + 'px ' + settings.fontFamily(word);
+//      fctx.font = fontWeight + ' ' +
+//        (fontSize * mu).toString(10) + 'px ' + settings.fontFamily;
 
       // Estimate the dimension of the text with measureText().
       var fw = fctx.measureText(word).width / mu;
@@ -598,8 +618,9 @@ if (!window.clearImmediate) {
 
       // Once the width/height is set, ctx info will be reset.
       // Set it again here.
-      fctx.font = fontWeight + ' ' +
-        (fontSize * mu).toString(10) + 'px ' + settings.fontFamily;
+      //fctx.font = fontWeight + ' ' +
+        //(fontSize * mu).toString(10) + 'px ' + settings.fontFamily;
+         fctx.font = settings.fontWeight(word) + ' ' + (fontSize * mu).toString(10) + 'px ' + settings.fontFamily(word);
 
       // Fill the text into the fcanvas.
       // XXX: We cannot because textBaseline = 'top' here because
@@ -762,8 +783,10 @@ if (!window.clearImmediate) {
           ctx.save();
           ctx.scale(1 / mu, 1 / mu);
 
-          ctx.font = fontWeight + ' ' +
-                     (fontSize * mu).toString(10) + 'px ' + settings.fontFamily;
+//          ctx.font = fontWeight + ' ' +
+//                     (fontSize * mu).toString(10) + 'px ' + settings.fontFamily;
+         ctx.font = settings.fontWeight(word) + ' ' +
+                     (fontSize * mu).toString(10) + 'px ' + settings.fontFamily(word);
           ctx.fillStyle = color;
 
           // Translate the canvas position to the origin coordinate of where
@@ -805,8 +828,10 @@ if (!window.clearImmediate) {
           var styleRules = {
             'position': 'absolute',
             'display': 'block',
-            'font': fontWeight + ' ' +
-                    (fontSize * info.mu) + 'px ' + settings.fontFamily,
+            //'font': fontWeight + ' ' +
+            //        (fontSize * info.mu) + 'px ' + settings.fontFamily,
+            'font': settings.fontWeight(word) + ' ' +
+                    (fontSize * info.mu) + 'px ' + settings.fontFamily(word),
             'left': ((gx + info.gw / 2) * g + info.fillTextOffsetX) + 'px',
             'top': ((gy + info.gh / 2) * g + info.fillTextOffsetY) + 'px',
             'width': info.fillTextWidth + 'px',
@@ -982,34 +1007,24 @@ if (!window.clearImmediate) {
           return true;
         }
       }
-      if (settings.shrinkToFit) {
-        if (Array.isArray(item)) {
-          item[1] = item[1] * 3 / 4;
-        } else {
-          item.weight = item.weight * 3 / 4;
-        }
-        return putWord(item);
-      }
       // we tried all distances but text won't fit, return false
       return false;
     };
 
     /* Send DOM event to all elements. Will stop sending event and return
        if the previous one is canceled (for cancelable events). */
-    var sendEvent = function sendEvent(type, cancelable, details) {
+    var sendEvent = function sendEvent(type, cancelable, detail) {
       if (cancelable) {
         return !elements.some(function(el) {
-          var event = new CustomEvent(type, {
-            detail: details || {}
-          });
-          return !el.dispatchEvent(event);
+          var evt = document.createEvent('CustomEvent');
+          evt.initCustomEvent(type, true, cancelable, detail || {});
+          return !el.dispatchEvent(evt);
         }, this);
       } else {
         elements.forEach(function(el) {
-          var event = new CustomEvent(type, {
-            detail: details || {}
-          });
-          el.dispatchEvent(event);
+          var evt = document.createEvent('CustomEvent');
+          evt.initCustomEvent(type, true, cancelable, detail || {});
+          el.dispatchEvent(evt);
         }, this);
       }
     };
@@ -1130,8 +1145,14 @@ if (!window.clearImmediate) {
           canvas.addEventListener('mousemove', wordcloudhover);
         }
 
+        var touchend = function (e) {
+          e.preventDefault();
+        };
+
         if (settings.click) {
           canvas.addEventListener('click', wordcloudclick);
+          canvas.addEventListener('touchstart', wordcloudclick);
+          canvas.addEventListener('touchend', touchend);
           canvas.style.webkitTapHighlightColor = 'rgba(0, 0, 0, 0)';
         }
 
@@ -1140,6 +1161,8 @@ if (!window.clearImmediate) {
 
           canvas.removeEventListener('mousemove', wordcloudhover);
           canvas.removeEventListener('click', wordcloudclick);
+          canvas.removeEventListener('touchstart', wordcloudclick);
+          canvas.removeEventListener('touchend', touchend);
           hovered = undefined;
         });
       }
